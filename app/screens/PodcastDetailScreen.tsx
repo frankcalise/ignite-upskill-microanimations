@@ -61,7 +61,6 @@ export const PodcastDetailScreen: FC<AppStackScreenProps<"PodcastDetail">> = obs
 
     // TODO doesn't seem to rerender the BlurView with less intensity
     const blurAmount = useDerivedValue(() => {
-      console.log("scale.value", 25 - scale.value * 25)
       return scale.value * 25
     }, [scale])
 
@@ -76,10 +75,6 @@ export const PodcastDetailScreen: FC<AppStackScreenProps<"PodcastDetail">> = obs
         ],
       }
     })
-
-    console.log(episode.description)
-
-    const source = { html: `${episode.description}` }
 
     const pan = Gesture.Pan()
       .onChange((e) => {
