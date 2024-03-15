@@ -26,7 +26,6 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated"
 import {
-  $sizeStyles,
   Button,
   ButtonAccessoryProps,
   Card,
@@ -44,9 +43,10 @@ import { Episode } from "../models/Episode"
 import { DemoTabScreenProps } from "../navigators/DemoNavigator"
 import { colors, spacing } from "../theme"
 import { delay } from "../utils/delay"
-import { openLinkInBrowser } from "../utils/openLinkInBrowser"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { setStatusBarStyle } from "expo-status-bar"
+import * as Haptics from "expo-haptics"
+import { useAppNavigation } from "app/utils/useAppNavigation"
 
 const ICON_SIZE = 14
 
@@ -56,7 +56,6 @@ const rnrImage3 = require("../../assets/images/demo/rnr-image-3.png")
 const rnrImages = [rnrImage1, rnrImage2, rnrImage3]
 
 const CARD_HEIGHT = 120
-const TITLE_HEIGHT = 56 // 16 margin?
 
 const AnimatedListView = Animated.createAnimatedComponent(ListView)
 const AnimatedText = createAnimatedFunctionComponent(Text)
@@ -145,11 +144,7 @@ export const DemoPodcastListScreen: FC<DemoTabScreenProps<"DemoPodcastList">> = 
     })
 
     return (
-      <Screen
-        preset="fixed"
-        // safeAreaEdges={["top"]}
-        contentContainerStyle={$screenContentContainer}
-      >
+      <Screen preset="fixed" contentContainerStyle={$screenContentContainer}>
         <AnimatedListView<Episode>
           contentContainerStyle={$listContentContainer}
           data={episodeStore.episodesForList.slice()}
@@ -192,9 +187,10 @@ export const DemoPodcastListScreen: FC<DemoTabScreenProps<"DemoPodcastList">> = 
                 <View style={$toggle}>
                   <Toggle
                     value={episodeStore.favoritesOnly}
-                    onValueChange={() =>
+                    onValueChange={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                       episodeStore.setProp("favoritesOnly", !episodeStore.favoritesOnly)
-                    }
+                    }}
                     variant="switch"
                     labelTx="demoPodcastListScreen.onlyFavorites"
                     labelPosition="left"
@@ -258,6 +254,7 @@ const EpisodeCard = observer(function EpisodeCard({
   isFavorite: boolean
 }) {
   const liked = useSharedValue(isFavorite ? 1 : 0)
+  const navigation = useAppNavigation()
 
   const imageUri = useMemo<ImageSourcePropType>(() => {
     return rnrImages[Math.floor(Math.random() * rnrImages.length)]
@@ -319,12 +316,14 @@ const EpisodeCard = observer(function EpisodeCard({
   )
 
   const handlePressFavorite = () => {
+    Haptics.selectionAsync()
     onPressFavorite()
     liked.value = withSpring(liked.value ? 0 : 1)
   }
 
   const handlePressCard = () => {
-    openLinkInBrowser(episode.enclosure.link)
+    Haptics.selectionAsync()
+    navigation.navigate("PodcastDetail", { episode })
   }
 
   const ButtonLeftAccessory: ComponentType<ButtonAccessoryProps> = useMemo(
@@ -380,7 +379,13 @@ const EpisodeCard = observer(function EpisodeCard({
       }
       content={`${episode.parsedTitleAndSubtitle.title} - ${episode.parsedTitleAndSubtitle.subtitle}`}
       {...accessibilityHintProps}
-      RightComponent={<Image source={imageUri} style={$itemThumbnail} />}
+      RightComponent={
+        <Animated.Image
+          source={imageUri}
+          style={$itemThumbnail}
+          sharedTransitionTag={episode.guid}
+        />
+      }
       FooterComponent={
         <Button
           onPress={handlePressFavorite}
