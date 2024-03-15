@@ -11,16 +11,22 @@ import {
   TextStyle,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from "react-native"
 import { type ContentStyle } from "@shopify/flash-list"
 import Animated, {
-  Extrapolate,
+  Extrapolation,
+  FadeIn,
   interpolate,
+  interpolateColor,
+  runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from "react-native-reanimated"
 import {
+  $sizeStyles,
   Button,
   ButtonAccessoryProps,
   Card,
@@ -30,6 +36,7 @@ import {
   Screen,
   Text,
   Toggle,
+  createAnimatedFunctionComponent,
 } from "../components"
 import { isRTL, translate } from "../i18n"
 import { useStores } from "../models"
@@ -38,6 +45,8 @@ import { DemoTabScreenProps } from "../navigators/DemoNavigator"
 import { colors, spacing } from "../theme"
 import { delay } from "../utils/delay"
 import { openLinkInBrowser } from "../utils/openLinkInBrowser"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { setStatusBarStyle } from "expo-status-bar"
 
 const ICON_SIZE = 14
 
@@ -45,6 +54,12 @@ const rnrImage1 = require("../../assets/images/demo/rnr-image-1.png")
 const rnrImage2 = require("../../assets/images/demo/rnr-image-2.png")
 const rnrImage3 = require("../../assets/images/demo/rnr-image-3.png")
 const rnrImages = [rnrImage1, rnrImage2, rnrImage3]
+
+const CARD_HEIGHT = 120
+const TITLE_HEIGHT = 56 // 16 margin?
+
+const AnimatedListView = Animated.createAnimatedComponent(ListView)
+const AnimatedText = createAnimatedFunctionComponent(Text)
 
 export const DemoPodcastListScreen: FC<DemoTabScreenProps<"DemoPodcastList">> = observer(
   function DemoPodcastListScreen(_props) {
@@ -69,46 +84,110 @@ export const DemoPodcastListScreen: FC<DemoTabScreenProps<"DemoPodcastList">> = 
       setRefreshing(false)
     }
 
+    const scrollY = useSharedValue(0)
+    const dimensions = useWindowDimensions()
+    const insets = useSafeAreaInsets()
+    const expandMode = useSharedValue(false)
+
+    const scrollHandler = useAnimatedScrollHandler({
+      onScroll: (event) => {
+        scrollY.value = event.contentOffset.y
+        if (event.contentOffset.y >= 45 && !expandMode.value) {
+          expandMode.value = true
+          runOnJS(setStatusBarStyle)("light")
+        }
+        if (event.contentOffset.y < 45 && expandMode.value) {
+          expandMode.value = false
+          runOnJS(setStatusBarStyle)("auto")
+        }
+      },
+    })
+
+    const $headerContainerStyle = useAnimatedStyle(() => ({
+      top: Math.max(0, -scrollY.value),
+    }))
+    const $headerCardWrapperStyle = useAnimatedStyle(() => ({
+      paddingHorizontal: interpolate(scrollY.value, [0, 80], [spacing.xs, 0], Extrapolation.CLAMP),
+    }))
+
+    const $headerCardStyle = useAnimatedStyle(() => {
+      const borderRadius = interpolate(
+        scrollY.value,
+        [60, 80],
+        [spacing.lg, 0],
+        Extrapolation.CLAMP,
+      )
+      return {
+        backgroundColor: interpolateColor(
+          scrollY.value,
+          [0, 80],
+          ["transparent", colors.palette.secondary400],
+        ),
+        borderTopLeftRadius: borderRadius,
+        borderTopRightRadius: borderRadius,
+        height: interpolate(
+          scrollY.value,
+          [0, 80],
+          [CARD_HEIGHT, CARD_HEIGHT + insets.top],
+          Extrapolation.CLAMP,
+        ),
+      }
+    })
+
+    const $headerTitleStyle = useAnimatedStyle(() => {
+      return {
+        color: interpolateColor(
+          scrollY.value,
+          [0, 80],
+          [colors.palette.neutral900, colors.palette.neutral100],
+        ),
+      }
+    })
+
     return (
       <Screen
         preset="fixed"
-        safeAreaEdges={["top"]}
+        // safeAreaEdges={["top"]}
         contentContainerStyle={$screenContentContainer}
       >
-        <ListView<Episode>
+        <AnimatedListView<Episode>
           contentContainerStyle={$listContentContainer}
           data={episodeStore.episodesForList.slice()}
           extraData={episodeStore.favorites.length + episodeStore.episodes.length}
+          showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           estimatedItemSize={177}
           onRefresh={manualRefresh}
+          onScroll={scrollHandler}
           ListEmptyComponent={
             isLoading ? (
               <ActivityIndicator />
             ) : (
-              <EmptyState
-                preset="generic"
-                style={$emptyState}
-                headingTx={
-                  episodeStore.favoritesOnly
-                    ? "demoPodcastListScreen.noFavoritesEmptyState.heading"
-                    : undefined
-                }
-                contentTx={
-                  episodeStore.favoritesOnly
-                    ? "demoPodcastListScreen.noFavoritesEmptyState.content"
-                    : undefined
-                }
-                button={episodeStore.favoritesOnly ? "" : undefined}
-                buttonOnPress={manualRefresh}
-                imageStyle={$emptyStateImage}
-                ImageProps={{ resizeMode: "contain" }}
-              />
+              <Animated.View entering={FadeIn.duration(350)}>
+                <EmptyState
+                  preset="generic"
+                  style={$emptyState}
+                  headingTx={
+                    episodeStore.favoritesOnly
+                      ? "demoPodcastListScreen.noFavoritesEmptyState.heading"
+                      : undefined
+                  }
+                  contentTx={
+                    episodeStore.favoritesOnly
+                      ? "demoPodcastListScreen.noFavoritesEmptyState.content"
+                      : undefined
+                  }
+                  button={episodeStore.favoritesOnly ? "" : undefined}
+                  buttonOnPress={manualRefresh}
+                  imageStyle={$emptyStateImage}
+                  ImageProps={{ resizeMode: "contain" }}
+                />
+              </Animated.View>
             )
           }
           ListHeaderComponent={
-            <View style={$heading}>
-              <Text preset="heading" tx="demoPodcastListScreen.title" />
+            <>
+              <View style={{ height: CARD_HEIGHT }} />
               {(episodeStore.favoritesOnly || episodeStore.episodesForList.length > 0) && (
                 <View style={$toggle}>
                   <Toggle
@@ -124,7 +203,7 @@ export const DemoPodcastListScreen: FC<DemoTabScreenProps<"DemoPodcastList">> = 
                   />
                 </View>
               )}
-            </View>
+            </>
           }
           renderItem={({ item }) => (
             <EpisodeCard
@@ -134,6 +213,36 @@ export const DemoPodcastListScreen: FC<DemoTabScreenProps<"DemoPodcastList">> = 
             />
           )}
         />
+        {/* Animated header */}
+        <Animated.View style={[$headerContainer, $headerContainerStyle]}>
+          <Animated.View
+            style={[
+              $headerWrapper,
+              { width: dimensions.width, height: CARD_HEIGHT + insets.top },
+              $headerCardWrapperStyle,
+            ]}
+          >
+            <Animated.View style={[$card, $headerCardStyle]}>
+              <AnimatedText
+                preset="heading"
+                tx="demoPodcastListScreen.title"
+                style={$headerTitleStyle}
+              />
+            </Animated.View>
+          </Animated.View>
+          {/* <Animated.View
+            style={[
+              $headerWrapper,
+              { width: dimensions.width, height: CARD_HEIGHT + insets.top },
+              $headerCardWrapperStyle,
+            ]}
+          >
+            <Animated.View style={[$card, { backgroundColor: "red" }, $headerCardStyle]}>
+              <View style={[$cardCircle, { backgroundColor: "red" }]} />
+              <Text style={[$cardTitle, { color: "white" }]}>Current Balance</Text>
+            </Animated.View>
+          </Animated.View> */}
+        </Animated.View>
       </Screen>
     )
   },
@@ -159,10 +268,10 @@ const EpisodeCard = observer(function EpisodeCard({
     return {
       transform: [
         {
-          scale: interpolate(liked.value, [0, 1], [1, 0], Extrapolate.EXTEND),
+          scale: interpolate(liked.value, [0, 1], [1, 0], Extrapolation.EXTEND),
         },
       ],
-      opacity: interpolate(liked.value, [0, 1], [1, 0], Extrapolate.CLAMP),
+      opacity: interpolate(liked.value, [0, 1], [1, 0], Extrapolation.CLAMP),
     }
   })
 
@@ -378,5 +487,23 @@ const $emptyState: ViewStyle = {
 
 const $emptyStateImage: ImageStyle = {
   transform: [{ scaleX: isRTL ? -1 : 1 }],
+}
+
+const $headerContainer: ViewStyle = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+}
+
+const $headerWrapper: ViewStyle = {
+  justifyContent: "flex-end",
+}
+
+const $card: ViewStyle = {
+  justifyContent: "flex-end",
+  padding: spacing.md,
+  position: "relative",
+  overflow: "hidden",
+  borderRadius: 24,
 }
 // #endregion

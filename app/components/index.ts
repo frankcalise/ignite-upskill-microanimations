@@ -1,3 +1,4 @@
+export * from "./Animated"
 export * from "./AutoImage"
 export * from "./Button"
 export * from "./Card"

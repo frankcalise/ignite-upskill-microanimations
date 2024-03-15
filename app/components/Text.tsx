@@ -73,7 +73,7 @@ export function Text(props: TextProps) {
   )
 }
 
-const $sizeStyles = {
+export const $sizeStyles = {
   xxl: { fontSize: 36, lineHeight: 44 } satisfies TextStyle,
   xl: { fontSize: 24, lineHeight: 34 } satisfies TextStyle,
   lg: { fontSize: 20, lineHeight: 32 } satisfies TextStyle,
